@@ -26,6 +26,7 @@ export type SessionSummary = {
 	version: string | null;
 	firstUserMessage: string | null;
 	lastUserMessage: string | null;
+	title: string | null;
 	fileSize: number;
 	hasErrors: boolean;
 };
@@ -63,6 +64,7 @@ export type SessionDetail = {
 	cwd: string;
 	branch: string | null;
 	version: string | null;
+	title: string | null;
 	startTime: number;
 	endTime: number;
 	events: NormalizedEvent[];

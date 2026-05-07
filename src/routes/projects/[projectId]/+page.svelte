@@ -10,6 +10,7 @@
 	} from '$lib/format';
 	import { pinned } from '$lib/pinned.svelte';
 	import PinButton from '$lib/components/PinButton.svelte';
+	import EditableTitle from '$lib/components/EditableTitle.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -54,10 +55,10 @@
 <section class="space-y-6">
 	<a
 		href="/"
-		class="inline-flex items-center gap-1.5 text-xs text-ink-400 transition hover:text-ink-100"
+		class="inline-flex items-center gap-2 rounded-lg border border-ink-800 bg-ink-900/40 px-3 py-1.5 text-[13px] font-medium text-ink-300 transition hover:border-ink-700 hover:bg-ink-900/80 hover:text-ink-100"
 	>
 		<svg
-			class="size-3.5"
+			class="size-4"
 			viewBox="0 0 24 24"
 			fill="none"
 			stroke="currentColor"
@@ -126,14 +127,18 @@
 				{@const isPinned = pinned.hasSession(data.project.id, s.sessionId)}
 				{@const isLastPinned = isPinned && i === pinnedCount - 1 && pinnedCount < sorted.length}
 				<li>
-					<div class="group relative">
+					<div
+						class="surface-card group relative flex flex-col gap-3 rounded-2xl p-5 {isPinned
+							? 'border-warm-500/30'
+							: ''}"
+						style={isPinned ? '--card-glow: var(--color-warm-500);' : ''}
+					>
 						<a
 							href="/projects/{encodeURIComponent(data.project.id)}/sessions/{s.sessionId}"
-							class="surface-card flex flex-col gap-3 rounded-2xl p-5 {isPinned
-								? 'border-warm-500/30'
-								: ''}"
-							style={isPinned ? '--card-glow: var(--color-warm-500);' : ''}
-						>
+							class="absolute inset-0 z-0"
+							aria-label="Open session"
+						></a>
+						<div class="contents">
 							{#if isPinned}
 								<span
 									class="pointer-events-none absolute inset-x-0 top-0 h-px"
@@ -188,11 +193,22 @@
 											{formatAbsoluteTime(s.startTime)}
 										</span>
 									</div>
-									<p class="text-pretty text-[15px] leading-relaxed text-ink-100">
-										{truncate(s.firstUserMessage, 200) || '(no user prompt)'}
-									</p>
+									<div class="pointer-events-auto relative">
+										<EditableTitle
+											projectId={data.project.id}
+											sessionId={s.sessionId}
+											title={s.title}
+											fallback={truncate(s.firstUserMessage, 200) || '(no user prompt)'}
+											size="sm"
+										/>
+									</div>
+									{#if s.title && s.firstUserMessage}
+										<p class="line-clamp-2 text-[12.5px] text-ink-500">
+											{truncate(s.firstUserMessage, 160)}
+										</p>
+									{/if}
 								</div>
-								<div class="flex shrink-0 items-start gap-2">
+								<div class="pointer-events-auto relative flex shrink-0 items-start gap-2">
 									<PinButton kind="session" projectId={data.project.id} sessionId={s.sessionId} />
 									<svg
 										class="mt-1.5 size-4 text-ink-600 transition group-hover:translate-x-0.5 group-hover:text-ink-200"
@@ -219,7 +235,7 @@
 								>
 								<span class="ml-auto font-mono">{s.sessionId.slice(0, 8)}</span>
 							</div>
-						</a>
+						</div>
 					</div>
 					{#if isLastPinned}
 						<div class="my-3 flex items-center gap-3 px-1 text-[10px] uppercase tracking-[0.18em] text-ink-500">

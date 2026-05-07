@@ -10,6 +10,8 @@
 	import Avatar from '$lib/components/Avatar.svelte';
 	import Toggle from '$lib/components/Toggle.svelte';
 	import Markdown from '$lib/components/Markdown.svelte';
+	import ResumeButton from '$lib/components/ResumeButton.svelte';
+	import EditableTitle from '$lib/components/EditableTitle.svelte';
 	import type { NormalizedEvent } from '$lib/types';
 	import type { PageData } from './$types';
 
@@ -62,10 +64,10 @@
 <section class="space-y-6">
 	<a
 		href="/projects/{encodeURIComponent(data.project.id)}"
-		class="inline-flex items-center gap-1.5 text-xs text-ink-400 transition hover:text-ink-100"
+		class="inline-flex items-center gap-2 rounded-lg border border-ink-800 bg-ink-900/40 px-3 py-1.5 text-[13px] font-medium text-ink-300 transition hover:border-ink-700 hover:bg-ink-900/80 hover:text-ink-100"
 	>
 		<svg
-			class="size-3.5"
+			class="size-4"
 			viewBox="0 0 24 24"
 			fill="none"
 			stroke="currentColor"
@@ -117,12 +119,22 @@
 						>
 					{/if}
 				</div>
-				<h1 class="text-2xl font-semibold tracking-tight">Session transcript</h1>
+				<EditableTitle
+					projectId={data.project.id}
+					sessionId={data.session.sessionId}
+					title={data.session.title}
+					fallback="Session transcript"
+					size="lg"
+				/>
 				<div class="font-mono text-[11px] text-ink-500">
 					{shortenPath(data.session.cwd, data.home)}
 				</div>
 			</div>
-			<div class="text-right text-xs text-ink-400">
+			<div class="flex flex-col items-end gap-2 text-xs text-ink-400">
+				<ResumeButton
+					projectId={data.project.id}
+					sessionId={data.session.sessionId}
+				/>
 				<div>{formatAbsoluteTime(data.session.startTime)}</div>
 				<div class="text-ink-500">
 					{formatRelativeTime(data.session.startTime)} · {formatDuration(

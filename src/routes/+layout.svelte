@@ -7,7 +7,7 @@
 </script>
 
 <svelte:head>
-	<title>Claude History Viewer</title>
+	<title>Helm · Claude Code control deck</title>
 	<link rel="icon" type="image/png" href="/claude.png" />
 	<link rel="apple-touch-icon" href="/claude.png" />
 	<link rel="preconnect" href="https://rsms.me/" />
@@ -30,8 +30,8 @@
 					class="size-8 rounded-lg bg-white/5 object-contain p-0.5 ring-1 ring-inset ring-ink-800"
 				/>
 				<div class="leading-tight">
-					<div class="text-sm font-semibold tracking-tight">Claude History</div>
-					<div class="text-[10px] uppercase tracking-[0.18em] text-ink-400">Viewer</div>
+					<div class="text-sm font-semibold tracking-tight">Helm</div>
+					<div class="text-[10px] uppercase tracking-[0.18em] text-ink-400">Claude Code</div>
 				</div>
 			</a>
 			<Breadcrumbs />
@@ -53,7 +53,7 @@
 
 	<footer class="mx-auto w-full px-6 pb-12 pt-8 lg:px-10 text-xs text-ink-500">
 		<div class="flex items-center justify-between border-t border-ink-800/80 pt-6">
-			<span>Claude History Viewer · all data stays on your machine</span>
+			<span>Helm · all data stays on your machine</span>
 		</div>
 	</footer>
 </div>

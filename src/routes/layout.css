@@ -55,10 +55,10 @@
 	--color-ink-400: #5b6377;
 	--color-ink-500: #828a9c;
 	--color-ink-600: #b6bcca;
-	--color-ink-700: #d9dde5;
-	--color-ink-800: #eef0f4;
-	--color-ink-900: #f5f6f8;
-	--color-ink-950: #fbfbfd;
+	--color-ink-700: #d1d5dd;
+	--color-ink-800: #e1e4ea;
+	--color-ink-900: #ffffff;
+	--color-ink-950: #eef0f4;
 
 	--color-accent-300: #6d28d9;
 	--color-accent-400: #7c3aed;
@@ -191,18 +191,18 @@
 	}
 	:root[data-theme='light'] .surface-card {
 		background: #ffffff;
-		border: 1px solid #e6e8ee;
+		border: 1px solid #d4d8e0;
 		box-shadow:
 			0 1px 0 #ffffff inset,
-			0 1px 2px rgba(15, 23, 42, 0.04),
-			0 8px 20px -10px rgba(15, 23, 42, 0.08);
+			0 1px 2px rgba(15, 23, 42, 0.06),
+			0 8px 22px -10px rgba(15, 23, 42, 0.12);
 	}
 	:root[data-theme='light'] .surface-card:hover {
-		border-color: color-mix(in oklab, var(--card-glow, var(--color-accent-500)) 40%, #d1d5db);
+		border-color: color-mix(in oklab, var(--card-glow, var(--color-accent-500)) 50%, #b6bcca);
 		box-shadow:
 			0 1px 0 #ffffff inset,
-			0 4px 10px -4px rgba(15, 23, 42, 0.08),
-			0 14px 30px -10px color-mix(in oklab, var(--card-glow, var(--color-accent-500)) 25%, rgba(15, 23, 42, 0.1));
+			0 4px 12px -4px rgba(15, 23, 42, 0.1),
+			0 16px 32px -10px color-mix(in oklab, var(--card-glow, var(--color-accent-500)) 30%, rgba(15, 23, 42, 0.14));
 	}
 
 	/* Stat-color helpers used in cards (iris=Sessions, accent=Events, warm=Prompts) */
@@ -242,12 +242,12 @@
 	}
 	:root[data-theme='light'] .metric-tile {
 		background:
-			radial-gradient(120% 80% at 0% 0%, color-mix(in oklab, var(--metric-color, var(--color-accent-500)) 8%, transparent) 0%, transparent 65%),
+			radial-gradient(120% 80% at 0% 0%, color-mix(in oklab, var(--metric-color, var(--color-accent-500)) 12%, transparent) 0%, transparent 65%),
 			#ffffff;
-		border-color: #e6e8ee;
+		border-color: #d4d8e0;
 		box-shadow:
 			0 1px 0 #ffffff inset,
-			0 6px 18px -10px rgba(15, 23, 42, 0.08);
+			0 6px 18px -10px rgba(15, 23, 42, 0.12);
 	}
 	.metric-number {
 		background: linear-gradient(135deg, var(--metric-color, var(--color-accent-300)), color-mix(in oklab, var(--metric-color, var(--color-accent-300)) 50%, var(--color-ink-100)));

@@ -1,4 +1,4 @@
-import { readdir, stat, open } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
@@ -13,6 +13,72 @@ import type {
 
 const DEFAULT_HISTORY_DIR = join(homedir(), '.claude', 'projects');
 export const HISTORY_DIR = env.CLAUDE_PROJECTS_DIR?.trim() || DEFAULT_HISTORY_DIR;
+
+/**
+ * Claude Code's `/rename` command writes a custom title to a PID-keyed JSON
+ * file in `~/.claude/sessions/<pid>.json` under the `name` field — not to
+ * the JSONL `ai-title` event. We scan those files to pick up CLI-side
+ * renames and to know which file to update when our UI renames.
+ */
+export const SESSIONS_INDEX_DIR = join(homedir(), '.claude', 'sessions');
+
+export type SessionIndexEntry = {
+	filePath: string;
+	sessionId: string;
+	name?: string;
+	updatedAt?: number;
+};
+
+export async function loadSessionsIndex(): Promise<Map<string, SessionIndexEntry>> {
+	const map = new Map<string, SessionIndexEntry>();
+	let files: string[] = [];
+	try {
+		files = (await readdir(SESSIONS_INDEX_DIR)).filter((f: string) => f.endsWith('.json'));
+	} catch {
+		return map;
+	}
+	await Promise.all(
+		files.map(async (f: string) => {
+			const filePath = join(SESSIONS_INDEX_DIR, f);
+			try {
+				const txt = await readFile(filePath, 'utf8');
+				const j = JSON.parse(txt);
+				if (!j || typeof j.sessionId !== 'string') return;
+				const entry: SessionIndexEntry = {
+					filePath,
+					sessionId: j.sessionId,
+					name: typeof j.name === 'string' && j.name.trim() ? j.name.trim() : undefined,
+					updatedAt: typeof j.updatedAt === 'number' ? j.updatedAt : undefined
+				};
+				const existing = map.get(j.sessionId);
+				if (
+					!existing ||
+					(entry.updatedAt !== undefined &&
+						(existing.updatedAt === undefined || existing.updatedAt < entry.updatedAt))
+				) {
+					map.set(j.sessionId, entry);
+				}
+			} catch {
+				/* ignore malformed file */
+			}
+		})
+	);
+	return map;
+}
+
+export function pickTitle(
+	indexEntry: SessionIndexEntry | undefined,
+	customTitle: string | null,
+	aiTitle: string | null
+): string | null {
+	// Precedence (matches Claude `/resume`):
+	//   1. Active session's PID-JSON `name` (most authoritative for live sessions)
+	//   2. JSONL `custom-title` event (written by `/rename`)
+	//   3. JSONL `ai-title` event (auto-generated)
+	if (indexEntry?.name) return indexEntry.name;
+	if (customTitle) return customTitle;
+	return aiTitle;
+}
 
 async function readJsonlLines(filePath: string): Promise<unknown[]> {
 	const lines: unknown[] = [];
@@ -174,8 +240,9 @@ export async function listSessions(projectId: string): Promise<SessionSummary[]>
 	} catch {
 		return [];
 	}
+	const index = await loadSessionsIndex();
 	const summaries = await Promise.all(
-		files.map(async (f: string) => summarizeSession(projectId, f))
+		files.map(async (f: string) => summarizeSession(projectId, f, index))
 	);
 	return summaries
 		.filter((s): s is SessionSummary => s !== null)
@@ -184,7 +251,8 @@ export async function listSessions(projectId: string): Promise<SessionSummary[]>
 
 async function summarizeSession(
 	projectId: string,
-	fileName: string
+	fileName: string,
+	index?: Map<string, SessionIndexEntry>
 ): Promise<SessionSummary | null> {
 	const filePath = join(HISTORY_DIR, projectId, fileName);
 	let st;
@@ -206,6 +274,8 @@ async function summarizeSession(
 	let assistantMessageCount = 0;
 	let toolUseCount = 0;
 	let hasErrors = false;
+	let aiTitle: string | null = null;
+	let customTitle: string | null = null;
 	for await (const obj of iterJsonlLines(filePath)) {
 		messageCount += 1;
 		if (!obj || typeof obj !== 'object') continue;
@@ -218,6 +288,14 @@ async function summarizeSession(
 		if (!cwd && typeof o.cwd === 'string') cwd = o.cwd;
 		if (!branch && typeof o.gitBranch === 'string') branch = o.gitBranch;
 		if (!version && typeof o.version === 'string') version = o.version;
+		if (o.type === 'custom-title' && typeof o.customTitle === 'string' && o.customTitle.trim()) {
+			// Latest custom-title wins. This is what `/rename` writes and what
+			// `/resume` displays.
+			customTitle = o.customTitle.trim();
+		}
+		if (o.type === 'ai-title' && typeof o.aiTitle === 'string' && o.aiTitle.trim()) {
+			aiTitle = o.aiTitle.trim();
+		}
 		if (o.type === 'user') {
 			const role = o.message?.role;
 			const content = o.message?.content;
@@ -239,6 +317,8 @@ async function summarizeSession(
 			hasErrors = true;
 		}
 	}
+	const idx = index?.get(sessionId);
+	const finalTitle = pickTitle(idx, customTitle, aiTitle);
 	return {
 		sessionId,
 		projectId,
@@ -254,6 +334,7 @@ async function summarizeSession(
 		version,
 		firstUserMessage,
 		lastUserMessage,
+		title: finalTitle,
 		fileSize: st.size,
 		hasErrors
 	} satisfies SessionSummary;
@@ -272,11 +353,16 @@ export async function getSession(
 		return null;
 	}
 	if (!exists) return null;
-	const lines = await readJsonlLines(filePath);
+	const [lines, index] = await Promise.all([
+		readJsonlLines(filePath),
+		loadSessionsIndex()
+	]);
 	const events: NormalizedEvent[] = [];
 	let cwd = '';
 	let branch: string | null = null;
 	let version: string | null = null;
+	let aiTitle: string | null = null;
+	let customTitle: string | null = null;
 	let startTime = 0;
 	let endTime = 0;
 	let userMessages = 0;
@@ -297,6 +383,12 @@ export async function getSession(
 		if (!cwd && typeof o.cwd === 'string') cwd = o.cwd;
 		if (!branch && typeof o.gitBranch === 'string') branch = o.gitBranch;
 		if (!version && typeof o.version === 'string') version = o.version;
+		if (o.type === 'custom-title' && typeof o.customTitle === 'string' && o.customTitle.trim()) {
+			customTitle = o.customTitle.trim();
+		}
+		if (o.type === 'ai-title' && typeof o.aiTitle === 'string' && o.aiTitle.trim()) {
+			aiTitle = o.aiTitle.trim();
+		}
 		const base = {
 			uuid: o.uuid ?? cryptoRandomId(),
 			parentUuid: o.parentUuid ?? null,
@@ -381,9 +473,13 @@ export async function getSession(
 				}
 			}
 		} else if (type === 'system') {
+			// Only "real" errors stay as `system` (always visible, red styling).
+			// Hooks / turn-duration / informational summaries become `meta` so
+			// they're hidden by default behind the "Show meta lines" toggle.
+			const isError = o.level === 'error' || !!o.error;
 			events.push({
 				...base,
-				kind: 'system',
+				kind: isError ? 'system' : 'meta',
 				role: 'system',
 				subtype: o.subtype,
 				error: o.error,
@@ -411,6 +507,7 @@ export async function getSession(
 		cwd,
 		branch,
 		version,
+		title: pickTitle(index.get(sessionId), customTitle, aiTitle),
 		startTime,
 		endTime,
 		events,

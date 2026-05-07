@@ -1,0 +1,264 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/typography';
+
+@theme {
+	--font-sans:
+		'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+		sans-serif;
+	--font-mono:
+		'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+	--color-ink-50: #f8f9fb;
+	--color-ink-100: #eef0f4;
+	--color-ink-200: #d9dde5;
+	--color-ink-300: #b6bcca;
+	--color-ink-400: #828a9c;
+	--color-ink-500: #5b6377;
+	--color-ink-600: #424a5d;
+	--color-ink-700: #2f3647;
+	--color-ink-800: #1d2233;
+	--color-ink-900: #11141f;
+	--color-ink-950: #080a13;
+
+	--color-accent-300: #a78bfa;
+	--color-accent-400: #8b5cf6;
+	--color-accent-500: #7c3aed;
+	--color-accent-600: #6d28d9;
+
+	--color-warm-300: #fde68a;
+	--color-warm-400: #fbbf24;
+	--color-warm-500: #f59e0b;
+
+	--color-emerald-300: #6ee7b7;
+	--color-emerald-500: #10b981;
+
+	--color-rose-300: #fca5a5;
+	--color-rose-500: #ef4444;
+
+	--color-iris-300: #93c5fd;
+	--color-iris-400: #60a5fa;
+	--color-iris-500: #3b82f6;
+
+	/* Claude brand orange (matches the favicon/icon) */
+	--color-claude-300: #f4a78a;
+	--color-claude-400: #e88762;
+	--color-claude-500: #d97757;
+	--color-claude-600: #b85a3e;
+}
+
+/* Light theme: invert the ink scale so existing classes keep working */
+:root[data-theme='light'] {
+	--color-ink-50: #0b0d18;
+	--color-ink-100: #11141f;
+	--color-ink-200: #1d2233;
+	--color-ink-300: #2f3647;
+	--color-ink-400: #5b6377;
+	--color-ink-500: #828a9c;
+	--color-ink-600: #b6bcca;
+	--color-ink-700: #d9dde5;
+	--color-ink-800: #eef0f4;
+	--color-ink-900: #f5f6f8;
+	--color-ink-950: #fbfbfd;
+
+	--color-accent-300: #6d28d9;
+	--color-accent-400: #7c3aed;
+	--color-accent-500: #8b5cf6;
+	--color-accent-600: #a78bfa;
+}
+
+@layer base {
+	:root[data-theme='dark'] {
+		color-scheme: dark;
+	}
+	:root[data-theme='light'] {
+		color-scheme: light;
+	}
+	body {
+		background: var(--color-ink-950);
+		color: var(--color-ink-100);
+		font-family: var(--font-sans);
+		font-feature-settings: 'cv11', 'ss01';
+		-webkit-font-smoothing: antialiased;
+		text-rendering: optimizeLegibility;
+		transition:
+			background-color 0.18s ease,
+			color 0.18s ease;
+	}
+	::selection {
+		background: var(--color-accent-500);
+		color: #fff;
+	}
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: var(--color-ink-700) transparent;
+	}
+}
+
+@layer utilities {
+	.text-claude {
+		background: linear-gradient(135deg, var(--color-claude-400) 0%, var(--color-claude-500) 60%, var(--color-claude-600) 100%);
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+	}
+	:root[data-theme='light'] .text-claude {
+		background: linear-gradient(135deg, var(--color-claude-500) 0%, var(--color-claude-600) 100%);
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+	}
+	.bg-grid {
+		background-image:
+			linear-gradient(to right, rgba(127, 127, 127, 0.06) 1px, transparent 1px),
+			linear-gradient(to bottom, rgba(127, 127, 127, 0.06) 1px, transparent 1px);
+		background-size: 32px 32px;
+	}
+	.text-balance {
+		text-wrap: balance;
+	}
+	.text-pretty {
+		text-wrap: pretty;
+	}
+
+	/* Chat bubble accents */
+	.bubble-user {
+		background:
+			linear-gradient(180deg, color-mix(in oklab, var(--color-iris-500) 7%, transparent) 0%, transparent 100%),
+			color-mix(in oklab, var(--color-ink-900) 90%, transparent);
+		border: 1px solid color-mix(in oklab, var(--color-iris-500) 22%, transparent);
+		box-shadow:
+			0 1px 0 color-mix(in oklab, var(--color-iris-500) 8%, transparent) inset,
+			0 6px 24px -12px color-mix(in oklab, var(--color-iris-500) 35%, transparent);
+	}
+	.bubble-assistant {
+		background:
+			radial-gradient(120% 80% at 0% 0%, color-mix(in oklab, var(--color-accent-500) 10%, transparent) 0%, transparent 60%),
+			linear-gradient(180deg, color-mix(in oklab, var(--color-accent-500) 5%, transparent) 0%, transparent 100%),
+			color-mix(in oklab, var(--color-ink-900) 90%, transparent);
+		border: 1px solid color-mix(in oklab, var(--color-accent-500) 24%, transparent);
+		box-shadow:
+			0 1px 0 color-mix(in oklab, var(--color-accent-500) 12%, transparent) inset,
+			0 10px 40px -16px color-mix(in oklab, var(--color-accent-500) 45%, transparent);
+	}
+	:root[data-theme='light'] .bubble-user {
+		background:
+			linear-gradient(180deg, color-mix(in oklab, var(--color-iris-500) 5%, transparent) 0%, transparent 100%),
+			color-mix(in oklab, #ffffff 100%, transparent);
+		border-color: color-mix(in oklab, var(--color-iris-500) 30%, transparent);
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.8) inset,
+			0 4px 18px -8px color-mix(in oklab, var(--color-iris-500) 25%, transparent);
+	}
+	:root[data-theme='light'] .bubble-assistant {
+		background:
+			radial-gradient(120% 80% at 0% 0%, color-mix(in oklab, var(--color-accent-400) 8%, transparent) 0%, transparent 60%),
+			color-mix(in oklab, #ffffff 100%, transparent);
+		border-color: color-mix(in oklab, var(--color-accent-400) 36%, transparent);
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.8) inset,
+			0 8px 28px -10px color-mix(in oklab, var(--color-accent-400) 30%, transparent);
+	}
+	.bubble-rail-user {
+		background: linear-gradient(180deg, var(--color-iris-400), color-mix(in oklab, var(--color-iris-400) 30%, transparent));
+	}
+	.bubble-rail-assistant {
+		background: linear-gradient(180deg, var(--color-accent-400), color-mix(in oklab, var(--color-warm-400) 50%, var(--color-accent-400)));
+	}
+
+	/* Project + metric cards: rich surface with elevation */
+	.surface-card {
+		background:
+			linear-gradient(180deg, color-mix(in oklab, var(--color-ink-800) 30%, transparent) 0%, transparent 80%),
+			color-mix(in oklab, var(--color-ink-900) 70%, transparent);
+		border: 1px solid color-mix(in oklab, var(--color-ink-700) 70%, transparent);
+		box-shadow:
+			0 1px 0 color-mix(in oklab, #ffffff 5%, transparent) inset,
+			0 12px 30px -16px rgba(0, 0, 0, 0.6),
+			0 4px 10px -6px rgba(0, 0, 0, 0.4);
+		transition:
+			transform 0.2s ease,
+			border-color 0.2s ease,
+			box-shadow 0.25s ease;
+	}
+	.surface-card:hover {
+		transform: translateY(-2px);
+		border-color: color-mix(in oklab, var(--color-ink-600) 80%, transparent);
+		box-shadow:
+			0 1px 0 color-mix(in oklab, #ffffff 7%, transparent) inset,
+			0 18px 40px -18px rgba(0, 0, 0, 0.75),
+			0 6px 14px -6px rgba(0, 0, 0, 0.55),
+			0 0 0 1px color-mix(in oklab, var(--card-glow, var(--color-accent-500)) 20%, transparent);
+	}
+	:root[data-theme='light'] .surface-card {
+		background: #ffffff;
+		border: 1px solid #e6e8ee;
+		box-shadow:
+			0 1px 0 #ffffff inset,
+			0 1px 2px rgba(15, 23, 42, 0.04),
+			0 8px 20px -10px rgba(15, 23, 42, 0.08);
+	}
+	:root[data-theme='light'] .surface-card:hover {
+		border-color: color-mix(in oklab, var(--card-glow, var(--color-accent-500)) 40%, #d1d5db);
+		box-shadow:
+			0 1px 0 #ffffff inset,
+			0 4px 10px -4px rgba(15, 23, 42, 0.08),
+			0 14px 30px -10px color-mix(in oklab, var(--card-glow, var(--color-accent-500)) 25%, rgba(15, 23, 42, 0.1));
+	}
+
+	/* Stat-color helpers used in cards (iris=Sessions, accent=Events, warm=Prompts) */
+	.stat-iris {
+		color: var(--color-iris-400);
+	}
+	.stat-accent {
+		color: var(--color-accent-400);
+	}
+	.stat-warm {
+		color: var(--color-warm-400);
+	}
+	:root[data-theme='light'] .stat-iris {
+		color: var(--color-iris-500);
+	}
+	:root[data-theme='light'] .stat-accent {
+		color: var(--color-accent-300);
+	}
+	:root[data-theme='light'] .stat-warm {
+		color: var(--color-warm-500);
+	}
+
+	/* Hero metric tile: bigger, with a gradient corner glow */
+	.metric-tile {
+		position: relative;
+		overflow: hidden;
+		border-radius: 1rem;
+		padding: 1rem 1.1rem;
+		background:
+			radial-gradient(120% 80% at 0% 0%, color-mix(in oklab, var(--metric-color, var(--color-accent-500)) 12%, transparent) 0%, transparent 60%),
+			linear-gradient(180deg, color-mix(in oklab, var(--color-ink-800) 25%, transparent) 0%, transparent 80%),
+			color-mix(in oklab, var(--color-ink-900) 70%, transparent);
+		border: 1px solid color-mix(in oklab, var(--color-ink-700) 70%, transparent);
+		box-shadow:
+			0 1px 0 color-mix(in oklab, #ffffff 5%, transparent) inset,
+			0 8px 22px -14px rgba(0, 0, 0, 0.55);
+	}
+	:root[data-theme='light'] .metric-tile {
+		background:
+			radial-gradient(120% 80% at 0% 0%, color-mix(in oklab, var(--metric-color, var(--color-accent-500)) 8%, transparent) 0%, transparent 65%),
+			#ffffff;
+		border-color: #e6e8ee;
+		box-shadow:
+			0 1px 0 #ffffff inset,
+			0 6px 18px -10px rgba(15, 23, 42, 0.08);
+	}
+	.metric-number {
+		background: linear-gradient(135deg, var(--metric-color, var(--color-accent-300)), color-mix(in oklab, var(--metric-color, var(--color-accent-300)) 50%, var(--color-ink-100)));
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+	}
+	:root[data-theme='light'] .metric-number {
+		background: linear-gradient(135deg, var(--metric-color, var(--color-accent-500)), color-mix(in oklab, var(--metric-color, var(--color-accent-500)) 60%, #1d2233));
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+	}
+}

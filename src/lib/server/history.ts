@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, stat, unlink } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
@@ -8,7 +8,8 @@ import type {
 	ProjectSummary,
 	SessionSummary,
 	SessionDetail,
-	NormalizedEvent
+	NormalizedEvent,
+	SearchHit
 } from '$lib/types';
 
 const DEFAULT_HISTORY_DIR = join(homedir(), '.claude', 'projects');
@@ -276,6 +277,7 @@ async function summarizeSession(
 	let hasErrors = false;
 	let aiTitle: string | null = null;
 	let customTitle: string | null = null;
+	let lastBashCommand: string | null = null;
 	for await (const obj of iterJsonlLines(filePath)) {
 		messageCount += 1;
 		if (!obj || typeof obj !== 'object') continue;
@@ -309,7 +311,12 @@ async function summarizeSession(
 			const content = o.message?.content;
 			if (Array.isArray(content)) {
 				for (const c of content) {
-					if (c?.type === 'tool_use') toolUseCount += 1;
+					if (c?.type === 'tool_use') {
+						toolUseCount += 1;
+						if (c.name === 'Bash' && typeof c.input?.command === 'string') {
+							lastBashCommand = c.input.command;
+						}
+					}
 				}
 			}
 			if (o.isApiErrorMessage) hasErrors = true;
@@ -334,6 +341,7 @@ async function summarizeSession(
 		version,
 		firstUserMessage,
 		lastUserMessage,
+		lastBashCommand,
 		title: finalTitle,
 		fileSize: st.size,
 		hasErrors
@@ -544,4 +552,203 @@ function trackFilesTouched(toolName: string, input: any, set: Set<string>) {
 
 function cryptoRandomId(): string {
 	return Math.random().toString(36).slice(2, 11);
+}
+
+function makeSnippet(text: string, query: string, maxLen = 220): string {
+	const lower = text.toLowerCase();
+	const q = query.toLowerCase();
+	const idx = lower.indexOf(q);
+	if (idx === -1) return text.slice(0, maxLen).trim();
+	const start = Math.max(0, idx - 60);
+	const end = Math.min(text.length, idx + q.length + 140);
+	const head = start > 0 ? '…' : '';
+	const tail = end < text.length ? '…' : '';
+	return head + text.slice(start, end).replace(/\s+/g, ' ').trim() + tail;
+}
+
+/**
+ * Substring-search across every project's JSONL files.
+ * Hits are deduped per session+role and sorted newest-first.
+ */
+export async function searchAllSessions(
+	query: string,
+	opts: { limit?: number } = {}
+): Promise<SearchHit[]> {
+	const q = query.trim();
+	if (!q) return [];
+	const lowerQ = q.toLowerCase();
+	const limit = Math.max(1, Math.min(opts.limit ?? 80, 300));
+
+	let projectIds: string[] = [];
+	try {
+		projectIds = await readdir(HISTORY_DIR);
+	} catch {
+		return [];
+	}
+
+	const projects = await listProjects();
+	const projectNameById = new Map<string, string>(projects.map((p) => [p.id, p.displayName]));
+	const titlesIndex = await loadSessionsIndex();
+	const titleCache = new Map<string, string | null>();
+	const hits: SearchHit[] = [];
+
+	for (const projectId of projectIds) {
+		if (hits.length >= limit) break;
+		const dir = join(HISTORY_DIR, projectId);
+		let files: string[] = [];
+		try {
+			files = (await readdir(dir)).filter((f) => f.endsWith('.jsonl'));
+		} catch {
+			continue;
+		}
+		for (const f of files) {
+			if (hits.length >= limit) break;
+			const filePath = join(dir, f);
+			const sessionId = f.replace(/\.jsonl$/, '');
+			let sessionTitle: string | null = null;
+			let titleKnown = false;
+			const seenRoles = new Set<string>();
+			const stream = createReadStream(filePath, { encoding: 'utf8' });
+			const rl = createInterface({ input: stream, crlfDelay: Infinity });
+			for await (const line of rl) {
+				if (hits.length >= limit) break;
+				if (!line.trim()) continue;
+				if (!line.toLowerCase().includes(lowerQ)) continue;
+				let obj: any;
+				try {
+					obj = JSON.parse(line);
+				} catch {
+					continue;
+				}
+				if (!obj || typeof obj !== 'object') continue;
+				const ts = asTimestamp(obj.timestamp);
+				let text: string | null = null;
+				let role: 'user' | 'assistant' | null = null;
+				if (obj.type === 'user' && typeof obj.message?.content === 'string') {
+					text = obj.message.content;
+					role = 'user';
+				} else if (obj.type === 'assistant' && Array.isArray(obj.message?.content)) {
+					const parts: string[] = [];
+					for (const c of obj.message.content) {
+						if (c?.type === 'text' && typeof c.text === 'string') parts.push(c.text);
+					}
+					text = parts.join('\n').trim();
+					role = 'assistant';
+				}
+				if (!text || !role || !text.toLowerCase().includes(lowerQ)) continue;
+				const dedupeKey = `${sessionId}::${role}`;
+				if (seenRoles.has(dedupeKey)) continue;
+				seenRoles.add(dedupeKey);
+				if (!titleKnown) {
+					if (titleCache.has(sessionId)) sessionTitle = titleCache.get(sessionId)!;
+					else {
+						sessionTitle = await titleForSession(filePath, sessionId, titlesIndex);
+						titleCache.set(sessionId, sessionTitle);
+					}
+					titleKnown = true;
+				}
+				hits.push({
+					projectId,
+					projectName: projectNameById.get(projectId) ?? projectId,
+					sessionId,
+					sessionTitle,
+					timestamp: ts,
+					role,
+					snippet: makeSnippet(text, q)
+				});
+			}
+		}
+	}
+
+	hits.sort((a, b) => b.timestamp - a.timestamp);
+	return hits;
+}
+
+async function titleForSession(
+	filePath: string,
+	sessionId: string,
+	index: Map<string, SessionIndexEntry>
+): Promise<string | null> {
+	let custom: string | null = null;
+	let ai: string | null = null;
+	try {
+		for await (const obj of iterJsonlLines(filePath)) {
+			if (!obj || typeof obj !== 'object') continue;
+			const o = obj as any;
+			if (o.type === 'custom-title' && typeof o.customTitle === 'string') custom = o.customTitle;
+			else if (o.type === 'ai-title' && typeof o.aiTitle === 'string') ai = o.aiTitle;
+		}
+	} catch {
+		/* ignore */
+	}
+	return pickTitle(index.get(sessionId), custom, ai);
+}
+
+/** Recent sessions across all projects, newest first. */
+export async function listRecentSessions(limit = 10): Promise<SessionSummary[]> {
+	const projects = await listProjects();
+	const all: SessionSummary[] = [];
+	const index = await loadSessionsIndex();
+	for (const p of projects) {
+		const dir = join(HISTORY_DIR, p.id);
+		let files: string[] = [];
+		try {
+			files = (await readdir(dir)).filter((f) => f.endsWith('.jsonl'));
+		} catch {
+			continue;
+		}
+		const summaries = await Promise.all(
+			files.map((f) => summarizeSession(p.id, f, index))
+		);
+		for (const s of summaries) if (s) all.push(s);
+	}
+	all.sort((a, b) => b.startTime - a.startTime);
+	return all.slice(0, limit);
+}
+
+export async function deleteSession(projectId: string, sessionId: string): Promise<boolean> {
+	if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) return false;
+	const filePath = join(HISTORY_DIR, projectId, `${sessionId}.jsonl`);
+	try {
+		await unlink(filePath);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/** Render a session's events to clean Markdown for export/clipboard. */
+export function sessionToMarkdown(detail: SessionDetail, opts: { includeTools?: boolean } = {}): string {
+	const includeTools = opts.includeTools ?? false;
+	const lines: string[] = [];
+	const title = detail.title || 'Session transcript';
+	lines.push(`# ${title}`);
+	lines.push('');
+	lines.push(`> **cwd:** \`${detail.cwd || '?'}\``);
+	if (detail.branch) lines.push(`> **branch:** \`${detail.branch}\``);
+	if (detail.startTime) lines.push(`> **started:** ${new Date(detail.startTime).toISOString()}`);
+	lines.push('');
+
+	for (const e of detail.events) {
+		if (e.kind === 'user-text') {
+			lines.push(`### 👤 You`);
+			lines.push('');
+			lines.push((e.text ?? '').trim());
+			lines.push('');
+		} else if (e.kind === 'assistant-text') {
+			lines.push(`### 🤖 Claude`);
+			lines.push('');
+			lines.push((e.text ?? '').trim());
+			lines.push('');
+		} else if (e.kind === 'assistant-tool-use' && includeTools) {
+			lines.push(`<details><summary><strong>🛠️ ${e.toolName}</strong></summary>`);
+			lines.push('');
+			lines.push('```json');
+			lines.push(JSON.stringify(e.toolInput, null, 2).slice(0, 4000));
+			lines.push('```');
+			lines.push('</details>');
+			lines.push('');
+		}
+	}
+	return lines.join('\n').trim() + '\n';
 }

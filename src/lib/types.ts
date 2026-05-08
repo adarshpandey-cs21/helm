@@ -26,9 +26,20 @@ export type SessionSummary = {
 	version: string | null;
 	firstUserMessage: string | null;
 	lastUserMessage: string | null;
+	lastBashCommand: string | null;
 	title: string | null;
 	fileSize: number;
 	hasErrors: boolean;
+};
+
+export type SearchHit = {
+	projectId: string;
+	projectName: string;
+	sessionId: string;
+	sessionTitle: string | null;
+	timestamp: number;
+	role: 'user' | 'assistant';
+	snippet: string;
 };
 
 export type NormalizedEvent = {

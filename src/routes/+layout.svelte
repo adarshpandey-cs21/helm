@@ -2,9 +2,13 @@
 	import './layout.css';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
+	import NavSearch from '$lib/components/NavSearch.svelte';
+	import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
 
 	let { children } = $props();
 </script>
+
+<KeyboardShortcuts />
 
 <svelte:head>
 	<title>Helm · Claude Code control deck</title>
@@ -36,12 +40,7 @@
 			</a>
 			<Breadcrumbs />
 			<div class="ml-auto flex items-center gap-3 text-xs text-ink-400">
-				<span class="hidden md:inline">
-					Local-only · reads
-					<code class="rounded bg-ink-800/60 px-1.5 py-0.5 font-mono text-[11px] text-ink-200"
-						>~/.claude/projects/</code
-					>
-				</span>
+				<div class="hidden lg:block"><NavSearch /></div>
 				<ThemeToggle />
 			</div>
 		</div>

@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatRelativeTime, formatBytes, shortenPath } from '$lib/format';
+	import { formatRelativeTime, formatBytes, shortenPath, truncate } from '$lib/format';
 	import { pinned } from '$lib/pinned.svelte';
 	import PinButton from '$lib/components/PinButton.svelte';
+	import ResumeButton from '$lib/components/ResumeButton.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -178,6 +179,58 @@
 		{@render metric('Total events', totalStats.messages.toLocaleString(), '#fbbf24', 'spark')}
 		{@render metric('On disk', formatBytes(totalStats.size), '#10b981', 'disk')}
 	</div>
+
+	{#if data.recent && data.recent.length > 0}
+		<div class="space-y-3">
+			<div class="flex items-baseline gap-2">
+				<span class="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-500">
+					Recent activity
+				</span>
+				<span class="text-[11px] text-ink-600">across every project</span>
+			</div>
+			<ul class="grid gap-2 lg:grid-cols-2">
+				{#each data.recent as r (r.sessionId)}
+					<li>
+						<div class="surface-card group relative flex items-start gap-3 rounded-xl p-3.5">
+							<a
+								href="/projects/{encodeURIComponent(r.projectId)}/sessions/{r.sessionId}"
+								class="absolute inset-0 z-0"
+								aria-label="Open session"
+							></a>
+
+							<span
+								class="pointer-events-none relative grid size-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-accent-500/20 to-accent-600/10 font-mono text-[10px] font-bold uppercase text-accent-300 ring-1 ring-inset ring-accent-500/20"
+							>
+								{(r.title || r.firstUserMessage || r.sessionId).slice(0, 2)}
+							</span>
+							<div class="pointer-events-none relative min-w-0 flex-1">
+								<div class="flex items-center gap-2 text-[10.5px] text-ink-500">
+									<span class="truncate font-mono text-ink-400"
+										>{shortenPath(r.cwd, data.home)}</span
+									>
+									<span class="ml-auto shrink-0">{formatRelativeTime(r.startTime)}</span>
+								</div>
+								<p class="mt-1 truncate text-[13px] font-medium text-ink-100">
+									{r.title || truncate(r.firstUserMessage, 100) || '(no prompt)'}
+								</p>
+								<div class="mt-0.5 flex items-center gap-3 text-[10.5px] text-ink-500">
+									<span><b class="font-mono text-ink-300">{r.userMessageCount}</b> prompts</span>
+									<span><b class="font-mono text-ink-300">{r.toolUseCount}</b> tools</span>
+									{#if r.branch}
+										<span class="font-mono text-ink-400">·</span>
+										<span class="font-mono">{r.branch}</span>
+									{/if}
+								</div>
+							</div>
+							<div class="pointer-events-auto relative shrink-0">
+								<ResumeButton projectId={r.projectId} sessionId={r.sessionId} />
+							</div>
+						</div>
+					</li>
+				{/each}
+			</ul>
+		</div>
+	{/if}
 
 	<div class="flex flex-wrap items-center gap-3">
 		<label class="relative min-w-[240px] flex-1">

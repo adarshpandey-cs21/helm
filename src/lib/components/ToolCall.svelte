@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { NormalizedEvent } from '$lib/types';
 	import JsonView from './JsonView.svelte';
+	import FilePathLink from './FilePathLink.svelte';
 
 	let {
 		event,
@@ -8,6 +9,17 @@
 	}: { event: NormalizedEvent; result: NormalizedEvent | null } = $props();
 
 	let open = $state(false);
+
+	const FILE_TOOLS = ['Edit', 'Write', 'Read', 'NotebookEdit', 'MultiEdit'];
+
+	const filePath = $derived.by(() => {
+		const input = event.toolInput as any;
+		if (!input || typeof input !== 'object') return null;
+		if (FILE_TOOLS.includes(event.toolName ?? '') && typeof input.file_path === 'string') {
+			return input.file_path as string;
+		}
+		return null;
+	});
 
 	const summary = $derived.by(() => {
 		const input = event.toolInput as any;
@@ -53,10 +65,18 @@
 		? 'border-rose-500/30'
 		: 'border-ink-800/80'}"
 >
-	<button
-		type="button"
+	<div
+		role="button"
+		tabindex="0"
+		aria-expanded={open}
 		onclick={() => (open = !open)}
-		class="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-ink-900/80"
+		onkeydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				open = !open;
+			}
+		}}
+		class="flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left transition hover:bg-ink-900/80"
 	>
 		<span
 			class="grid size-6 shrink-0 place-items-center rounded-md bg-gradient-to-br from-accent-500/20 to-accent-600/20 text-[10px] font-semibold uppercase text-accent-300 ring-1 ring-inset ring-accent-500/30"
@@ -74,6 +94,15 @@
 				<div class="truncate font-mono text-[11.5px] text-ink-400">{summary}</div>
 			{/if}
 		</div>
+		{#if filePath}
+			<span
+				class="pointer-events-auto relative shrink-0"
+				onclick={(e) => e.stopPropagation()}
+				role="presentation"
+			>
+				<FilePathLink path={filePath} display="Open" />
+			</span>
+		{/if}
 		<svg
 			class="size-4 shrink-0 text-ink-500 transition {open ? 'rotate-90' : ''}"
 			viewBox="0 0 24 24"
@@ -83,7 +112,7 @@
 		>
 			<path d="m9 18 6-6-6-6" />
 		</svg>
-	</button>
+	</div>
 	{#if open}
 		<div class="space-y-3 border-t border-ink-800/80 bg-ink-950/40 p-4">
 			<div>

@@ -11,30 +11,56 @@
 	import { pinned } from '$lib/pinned.svelte';
 	import PinButton from '$lib/components/PinButton.svelte';
 	import EditableTitle from '$lib/components/EditableTitle.svelte';
+	import ResumeButton from '$lib/components/ResumeButton.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
 	let query = $state('');
 	let onlyWithErrors = $state(false);
+	type DateFilter = 'all' | 'today' | '7d' | '30d';
+	let dateFilter = $state<DateFilter>('all');
 
 	onMount(() => {
 		pinned.load();
 	});
 
+	function withinDateFilter(ts: number): boolean {
+		if (dateFilter === 'all') return true;
+		if (!ts) return false;
+		const now = Date.now();
+		if (dateFilter === 'today') {
+			const startOfDay = new Date();
+			startOfDay.setHours(0, 0, 0, 0);
+			return ts >= startOfDay.getTime();
+		}
+		const days = dateFilter === '7d' ? 7 : 30;
+		return ts >= now - days * 86400_000;
+	}
+
 	const filtered = $derived.by(() => {
 		const q = query.trim().toLowerCase();
 		return data.sessions.filter((s) => {
 			if (onlyWithErrors && !s.hasErrors) return false;
+			if (!withinDateFilter(s.startTime)) return false;
 			if (!q) return true;
 			return (
+				(s.title ?? '').toLowerCase().includes(q) ||
 				(s.firstUserMessage ?? '').toLowerCase().includes(q) ||
 				(s.lastUserMessage ?? '').toLowerCase().includes(q) ||
+				(s.lastBashCommand ?? '').toLowerCase().includes(q) ||
 				(s.branch ?? '').toLowerCase().includes(q) ||
 				s.sessionId.toLowerCase().includes(q)
 			);
 		});
 	});
+
+	const dateOptions: { k: DateFilter; l: string }[] = [
+		{ k: 'all', l: 'All time' },
+		{ k: 'today', l: 'Today' },
+		{ k: '7d', l: 'Last 7d' },
+		{ k: '30d', l: 'Last 30d' }
+	];
 
 	const sorted = $derived.by(() => {
 		if (!pinned.loaded) return filtered;
@@ -113,6 +139,20 @@
 			/>
 			<span>Only with errors</span>
 		</label>
+	</div>
+
+	<div class="flex flex-wrap items-center gap-1 rounded-xl border border-ink-800 bg-ink-900/60 p-1 text-xs">
+		{#each dateOptions as opt (opt.k)}
+			<button
+				type="button"
+				onclick={() => (dateFilter = opt.k)}
+				class="rounded-lg px-3 py-1.5 transition {dateFilter === opt.k
+					? 'bg-ink-700 text-ink-50 shadow-sm'
+					: 'text-ink-400 hover:text-ink-100'}"
+			>
+				{opt.l}
+			</button>
+		{/each}
 	</div>
 
 	{#if sorted.length === 0}
@@ -207,6 +247,25 @@
 											{truncate(s.firstUserMessage, 160)}
 										</p>
 									{/if}
+									{#if s.lastBashCommand}
+										<div
+											class="pointer-events-none flex items-center gap-1.5 truncate font-mono text-[11px] text-ink-500"
+										>
+											<svg
+												class="size-3 shrink-0 text-ink-600"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+												stroke-linecap="round"
+												stroke-linejoin="round"
+											>
+												<polyline points="4 17 10 11 4 5" />
+												<line x1="12" y1="19" x2="20" y2="19" />
+											</svg>
+											<span class="truncate">{truncate(s.lastBashCommand, 110)}</span>
+										</div>
+									{/if}
 								</div>
 								<div class="pointer-events-auto relative flex shrink-0 items-start gap-2">
 									<PinButton kind="session" projectId={data.project.id} sessionId={s.sessionId} />
@@ -222,9 +281,7 @@
 								</div>
 							</div>
 
-							<div
-								class="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-ink-500"
-							>
+							<div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-ink-500">
 								<span><b class="font-mono text-ink-200">{s.userMessageCount}</b> prompts</span>
 								<span
 									><b class="font-mono text-ink-200">{s.assistantMessageCount}</b> replies</span
@@ -234,6 +291,10 @@
 									><b class="font-mono text-ink-200">{formatDuration(s.durationMs)}</b> duration</span
 								>
 								<span class="ml-auto font-mono">{s.sessionId.slice(0, 8)}</span>
+							</div>
+
+							<div class="pointer-events-auto relative flex justify-end pt-1">
+								<ResumeButton projectId={data.project.id} sessionId={s.sessionId} />
 							</div>
 						</div>
 					</div>

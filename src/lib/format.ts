@@ -73,3 +73,25 @@ export function shortenPath(path: string, homePrefix?: string): string {
 	}
 	return path;
 }
+
+/**
+ * Build a deep-link URL into a local editor for an absolute file path.
+ * Returns null for non-absolute paths.
+ */
+export function editorLink(
+	editor: 'vscode' | 'cursor' | 'zed',
+	absolutePath: string,
+	line?: number
+): string | null {
+	if (!absolutePath || !absolutePath.startsWith('/')) return null;
+	const path = encodeURI(absolutePath);
+	const lineSuffix = line && line > 0 ? `:${line}:1` : '';
+	switch (editor) {
+		case 'vscode':
+			return `vscode://file${path}${lineSuffix}`;
+		case 'cursor':
+			return `cursor://file${path}${lineSuffix}`;
+		case 'zed':
+			return `zed://file${path}${lineSuffix}`;
+	}
+}

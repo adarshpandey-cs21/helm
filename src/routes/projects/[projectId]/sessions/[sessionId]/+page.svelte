@@ -12,6 +12,10 @@
 	import Markdown from '$lib/components/Markdown.svelte';
 	import ResumeButton from '$lib/components/ResumeButton.svelte';
 	import EditableTitle from '$lib/components/EditableTitle.svelte';
+	import CopyButton from '$lib/components/CopyButton.svelte';
+	import ScrollToBottom from '$lib/components/ScrollToBottom.svelte';
+	import DeleteSessionButton from '$lib/components/DeleteSessionButton.svelte';
+	import ExportButton from '$lib/components/ExportButton.svelte';
 	import type { NormalizedEvent } from '$lib/types';
 	import type { PageData } from './$types';
 
@@ -135,7 +139,17 @@
 					projectId={data.project.id}
 					sessionId={data.session.sessionId}
 				/>
-				<div>{formatAbsoluteTime(data.session.startTime)}</div>
+				<div class="flex items-center gap-2">
+					<ExportButton
+						projectId={data.project.id}
+						sessionId={data.session.sessionId}
+					/>
+					<DeleteSessionButton
+						projectId={data.project.id}
+						sessionId={data.session.sessionId}
+					/>
+				</div>
+				<div class="mt-1">{formatAbsoluteTime(data.session.startTime)}</div>
 				<div class="text-ink-500">
 					{formatRelativeTime(data.session.startTime)} · {formatDuration(
 						data.session.endTime - data.session.startTime
@@ -247,6 +261,8 @@
 									<span class="font-medium text-iris-300">You</span>
 									<span>·</span>
 									<span>{formatAbsoluteTime(e.timestamp)}</span>
+									<span class="ml-auto"></span>
+									<CopyButton text={e.text ?? ''} title="Copy this message" />
 								</div>
 								<div class="relative">
 									<span
@@ -274,6 +290,8 @@
 									{/if}
 									<span>·</span>
 									<span>{formatAbsoluteTime(e.timestamp)}</span>
+									<span class="ml-auto"></span>
+									<CopyButton text={e.text ?? ''} title="Copy this reply" />
 								</div>
 								<div class="relative">
 									<span
@@ -365,3 +383,5 @@
 		</ol>
 	{/if}
 </section>
+
+<ScrollToBottom />

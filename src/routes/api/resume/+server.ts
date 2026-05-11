@@ -142,7 +142,7 @@ async function openInWarpWindow(cwd: string, sessionId: string) {
 	// auto-runs the command. No Accessibility permission required.
 	const dir = join(homedir(), '.warp', 'launch_configurations');
 	await mkdir(dir, { recursive: true });
-	const configName = 'helm-resume';
+	const configName = 'relic-resume';
 	const configPath = join(dir, `${configName}.yaml`);
 	const yaml = `---
 name: ${yamlString(configName)}

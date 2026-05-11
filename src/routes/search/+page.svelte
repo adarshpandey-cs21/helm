@@ -60,7 +60,7 @@
 </script>
 
 <svelte:head>
-	<title>Search · Helm</title>
+	<title>Search · Relic</title>
 </svelte:head>
 
 <section class="space-y-6">

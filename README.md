@@ -1,10 +1,10 @@
-# Helm
+# Relic
 
 > Your Claude Code control deck.
 
 A local-only SvelteKit app to browse, replay, rename, pin, and resume every conversation you've had with [Claude Code](https://claude.com/claude-code), across every project on your machine.
 
-Helm reads the JSONL session logs Claude Code writes to `~/.claude/projects/` and gives you:
+Relic reads the JSONL session logs Claude Code writes to `~/.claude/projects/` and gives you:
 
 - A grid of all your projects with session counts, total events, prompts, and disk usage
 - Per-project session list with first-prompt previews, branch, duration, and token totals
@@ -28,8 +28,8 @@ All data stays on your machine — there's no server call out to anything.
 ## Setup
 
 ```bash
-git clone https://github.com/adarshpandey-cs21/helm.git
-cd helm
+git clone https://github.com/adarshpandey-cs21/relic.git
+cd relic
 pnpm install
 ```
 

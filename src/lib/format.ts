@@ -66,6 +66,35 @@ export function truncate(s: string | null | undefined, n = 200): string {
 	return trimmed.slice(0, n - 1) + '…';
 }
 
+/**
+ * Compact-notation number: 1234 → "1.2k", 1_500_000 → "1.5M". Used for token counts.
+ */
+export function formatCompactNumber(n: number): string {
+	if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+	if (n >= 1_000) return (n / 1_000).toFixed(1) + 'k';
+	return n.toString();
+}
+
+/**
+ * Percentage as a CSS-ready string (e.g. "33.33%"). Returns "0%" when total is 0.
+ */
+export function formatPercent(part: number, total: number): string {
+	if (!total) return '0%';
+	return ((part / total) * 100).toFixed(2) + '%';
+}
+
+/**
+ * USD cost with adaptive precision: "$1.5k" / "$123" / "$12.34" / "$0.0234".
+ * Returns "—" for zero / negative / NaN so call sites don't need to guard.
+ */
+export function formatCost(usd: number): string {
+	if (!usd || usd < 0) return '—';
+	if (usd >= 1000) return '$' + (usd / 1000).toFixed(1) + 'k';
+	if (usd >= 100) return '$' + usd.toFixed(0);
+	if (usd >= 1) return '$' + usd.toFixed(2);
+	return '$' + usd.toFixed(4);
+}
+
 export function shortenPath(path: string, homePrefix?: string): string {
 	if (!path) return '';
 	if (homePrefix && path.startsWith(homePrefix)) {

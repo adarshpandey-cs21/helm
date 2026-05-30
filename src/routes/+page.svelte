@@ -1,6 +1,18 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatRelativeTime, formatBytes, shortenPath, truncate } from '$lib/format';
+	import {
+		formatRelativeTime,
+		formatBytes,
+		formatCompactNumber,
+		formatCost,
+		formatPercent,
+		shortenPath,
+		truncate
+	} from '$lib/format';
+	import { mergeTokensByModel, sumTokens } from '$lib/tokens';
+	import { costFor, pricingFor, summarizePricing } from '$lib/pricing';
+	import WarningIcon from '$lib/components/WarningIcon.svelte';
+	import PricingWarning from '$lib/components/PricingWarning.svelte';
 	import { pinned } from '$lib/pinned.svelte';
 	import PinButton from '$lib/components/PinButton.svelte';
 	import ResumeButton from '$lib/components/ResumeButton.svelte';
@@ -68,6 +80,42 @@
 		{ k: 'messages', l: 'Events' },
 		{ k: 'name', l: 'Name' }
 	] as const;
+
+	const mergedTokens = $derived(mergeTokensByModel(data.projects.map((p) => p.tokensByModel)));
+	const tokenTotals = $derived(sumTokens(mergedTokens));
+
+	const TYPE_COLORS = {
+		input: '#60a5fa',
+		output: '#a78bfa',
+		cacheRead: '#fbbf24',
+		cacheCreate: '#34d399'
+	} as const;
+
+	const tokenTypes = $derived(
+		[
+			{ key: 'input', label: 'Input', value: tokenTotals.input, color: TYPE_COLORS.input },
+			{ key: 'output', label: 'Output', value: tokenTotals.output, color: TYPE_COLORS.output },
+			{ key: 'cacheRead', label: 'Cache read', value: tokenTotals.cacheRead, color: TYPE_COLORS.cacheRead },
+			{ key: 'cacheCreate', label: 'Cache write', value: tokenTotals.cacheCreate, color: TYPE_COLORS.cacheCreate }
+		].filter((t) => t.value > 0)
+	);
+
+	const MODEL_PALETTE = ['#38bdf8', '#a78bfa', '#f472b6', '#fb923c', '#facc15', '#34d399', '#f87171', '#22d3ee'];
+
+	const tokensByModel = $derived(
+		Object.entries(mergedTokens)
+			.map(([model, tok]) => ({
+				model,
+				...tok,
+				total: tok.input + tok.output + tok.cacheRead + tok.cacheCreate,
+				cost: costFor(tok, model),
+				pricingKnown: pricingFor(model) !== null
+			}))
+			.sort((a, b) => b.total - a.total)
+			.map((m, i) => ({ ...m, color: MODEL_PALETTE[i % MODEL_PALETTE.length] }))
+	);
+
+	const totalCost = $derived(summarizePricing(mergedTokens).cost);
 </script>
 
 {#snippet metric(
@@ -179,6 +227,140 @@
 		{@render metric('Total events', totalStats.messages.toLocaleString(), '#fbbf24', 'spark')}
 		{@render metric('On disk', formatBytes(totalStats.size), '#10b981', 'disk')}
 	</div>
+
+	{#if tokenTotals.total > 0}
+		<div class="surface-card no-hover space-y-6 rounded-2xl p-6">
+			<div class="flex flex-wrap items-end gap-x-10 gap-y-4">
+				<div>
+					<p class="text-[10px] font-medium uppercase tracking-[0.16em] text-ink-500">Tokens · all projects</p>
+					<div class="mt-2 font-mono text-3xl font-bold tracking-tight text-ink-100">{formatCompactNumber(tokenTotals.total)}</div>
+				</div>
+				{#if totalCost > 0}
+					<div>
+						<p class="text-[10px] font-medium uppercase tracking-[0.16em] text-ink-500">Estimated cost</p>
+						<div class="mt-2 font-mono text-3xl font-bold tracking-tight text-emerald-300">{formatCost(totalCost)}</div>
+					</div>
+				{/if}
+			</div>
+
+			<!-- Stacked bars: by token type + by model, side-by-side on md+ -->
+			<div class="grid gap-6 md:grid-cols-2">
+				<!-- By token type -->
+				<div class="space-y-2.5">
+					<p class="text-[10px] font-medium uppercase tracking-[0.14em] text-ink-500">By token type</p>
+					<div class="flex h-3 w-full overflow-hidden rounded-full bg-ink-800/60">
+						{#each tokenTypes as t (t.key)}
+							<div
+								class="h-full transition-all"
+								style="width: {formatPercent(t.value, tokenTotals.total)}; background-color: {t.color}"
+								title="{t.label}: {formatCompactNumber(t.value)} ({formatPercent(t.value, tokenTotals.total)})"
+							></div>
+						{/each}
+					</div>
+					<div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
+						{#each tokenTypes as t (t.key)}
+							<div class="flex items-center gap-2">
+								<span class="inline-block size-2 shrink-0 rounded-full" style="background-color: {t.color}"></span>
+								<span class="text-ink-500">{t.label}</span>
+								<span class="ml-auto font-mono text-ink-200">{formatCompactNumber(t.value)}</span>
+								<span class="font-mono text-[10px] text-ink-600">{formatPercent(t.value, tokenTotals.total)}</span>
+							</div>
+						{/each}
+					</div>
+				</div>
+
+				<!-- By model -->
+				{#if tokensByModel.length > 0}
+					<div class="space-y-2.5">
+						<p class="text-[10px] font-medium uppercase tracking-[0.14em] text-ink-500">By model</p>
+						<div class="flex h-3 w-full overflow-hidden rounded-full bg-ink-800/60">
+							{#each tokensByModel as m (m.model)}
+								<div
+									class="h-full transition-all"
+									style="width: {formatPercent(m.total, tokenTotals.total)}; background-color: {m.color}"
+									title="{m.model}: {formatCompactNumber(m.total)} ({formatPercent(m.total, tokenTotals.total)})"
+								></div>
+							{/each}
+						</div>
+						<div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
+							{#each tokensByModel as m (m.model)}
+								<div class="flex items-center gap-2">
+									<span class="inline-block size-2 shrink-0 rounded-full" style="background-color: {m.color}"></span>
+									<span class="truncate font-mono text-ink-300">{m.model}</span>
+									<span class="ml-auto font-mono text-ink-200">{formatCompactNumber(m.total)}</span>
+									<span class="font-mono text-[10px] text-ink-600">{formatPercent(m.total, tokenTotals.total)}</span>
+								</div>
+							{/each}
+						</div>
+					</div>
+				{/if}
+			</div>
+
+			<!-- Details table: per model × per type -->
+			{#if tokensByModel.length > 0}
+				<div class="space-y-2 border-t border-ink-800/60 pt-5">
+					<div class="-mx-1 overflow-x-auto px-1">
+						<table class="w-full text-[11px]">
+							<thead>
+								<tr class="text-left text-ink-500">
+									<th class="py-2 pr-4 font-medium">Model</th>
+									<th class="px-2 py-2 text-right font-medium">
+										<span class="inline-flex items-center gap-1.5">
+											<span class="inline-block size-1.5 rounded-full" style="background-color: {TYPE_COLORS.input}"></span>Input
+										</span>
+									</th>
+									<th class="px-2 py-2 text-right font-medium">
+										<span class="inline-flex items-center gap-1.5">
+											<span class="inline-block size-1.5 rounded-full" style="background-color: {TYPE_COLORS.output}"></span>Output
+										</span>
+									</th>
+									<th class="px-2 py-2 text-right font-medium">
+										<span class="inline-flex items-center gap-1.5">
+											<span class="inline-block size-1.5 rounded-full" style="background-color: {TYPE_COLORS.cacheRead}"></span>Cache read
+										</span>
+									</th>
+									<th class="px-2 py-2 text-right font-medium">
+										<span class="inline-flex items-center gap-1.5">
+											<span class="inline-block size-1.5 rounded-full" style="background-color: {TYPE_COLORS.cacheCreate}"></span>Cache write
+										</span>
+									</th>
+									<th class="px-2 py-2 text-right font-medium text-ink-400">Total</th>
+									<th class="py-2 pl-2 text-right font-medium text-emerald-300">Est. Cost</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-ink-800/50">
+								{#each tokensByModel as m (m.model)}
+									<tr class="hover:bg-ink-900/40">
+										<td class="py-2 pr-4">
+											<div class="flex items-center gap-2">
+												<span class="inline-block size-2 shrink-0 rounded-full" style="background-color: {m.color}"></span>
+												<span class="truncate font-mono text-ink-200">{m.model}</span>
+											</div>
+										</td>
+										<td class="px-2 py-2 text-right font-mono tabular-nums text-ink-300">{m.input ? formatCompactNumber(m.input) : '—'}</td>
+										<td class="px-2 py-2 text-right font-mono tabular-nums text-ink-300">{m.output ? formatCompactNumber(m.output) : '—'}</td>
+										<td class="px-2 py-2 text-right font-mono tabular-nums text-ink-300">{m.cacheRead ? formatCompactNumber(m.cacheRead) : '—'}</td>
+										<td class="px-2 py-2 text-right font-mono tabular-nums text-ink-300">{m.cacheCreate ? formatCompactNumber(m.cacheCreate) : '—'}</td>
+										<td class="px-2 py-2 text-right font-mono font-semibold tabular-nums text-ink-100">{formatCompactNumber(m.total)}</td>
+										<td class="py-2 pl-2 text-right font-mono font-semibold tabular-nums text-emerald-300">
+											{#if m.pricingKnown}
+												{formatCost(m.cost)}
+											{:else}
+												<WarningIcon
+													tooltip={`No pricing available for "${m.model}" — model is unknown or deprecated. Cost cannot be estimated.`}
+													ariaLabel="Unknown model pricing"
+												/>
+											{/if}
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			{/if}
+		</div>
+	{/if}
 
 	{#if data.recent && data.recent.length > 0}
 		<div class="space-y-3">
@@ -292,6 +474,8 @@
 					]}
 				{@const isProjectPinned = pinned.hasProject(p.id)}
 				{@const pinnedSessionIds = pinned.pinnedSessionIdsForProject(p.id)}
+				{@const totalTok = sumTokens(p.tokensByModel).total}
+				{@const { cost: pCost, unknownModels: pUnknownModels } = summarizePricing(p.tokensByModel)}
 				<li>
 					<div
 						class="surface-card group relative h-full overflow-hidden rounded-2xl p-5 {isProjectPinned
@@ -371,7 +555,7 @@
 						</dl>
 
 						<div
-							class="pointer-events-none relative z-10 mt-5 flex items-center justify-between border-t border-ink-800/60 pt-3 text-[11px] text-ink-500"
+							class="pointer-events-none relative z-10 mt-5 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-ink-800/60 pt-3 text-[11px] text-ink-500"
 						>
 							<span class="inline-flex items-center gap-1.5">
 								<span
@@ -380,36 +564,50 @@
 								></span>
 								{formatRelativeTime(p.lastActivity)}
 							</span>
-							<span class="flex items-center gap-3">
-								{#if pinnedSessionIds.length > 0}
-									<a
-										href="/projects/{encodeURIComponent(
-											p.id
-										)}/sessions/{pinnedSessionIds[0]}"
-										onclick={(e) => e.stopPropagation()}
-										class="pointer-events-auto relative inline-flex items-center gap-1 rounded-md bg-warm-500/15 px-1.5 py-0.5 text-warm-400 ring-1 ring-inset ring-warm-500/30 transition hover:bg-warm-500/25 hover:text-warm-300"
-										title="Jump to first pinned session"
+							<span class="text-ink-700">·</span>
+							<span class="font-mono">{formatBytes(p.totalSize)}</span>
+							{#if totalTok > 0}
+								<span class="text-ink-700">·</span>
+								<span class="font-mono">{formatCompactNumber(totalTok)} tokens</span>
+							{/if}
+							{#if pCost > 0 || pUnknownModels.length > 0}
+								<span class="text-ink-700">·</span>
+								<span class="inline-flex items-center gap-1">
+									<span class="font-mono">{formatCost(pCost)}</span>
+									{#if pUnknownModels.length > 0}
+										<span class="pointer-events-auto relative">
+											<PricingWarning unknownModels={pUnknownModels} size="size-3" />
+										</span>
+									{/if}
+								</span>
+							{/if}
+							{#if pinnedSessionIds.length > 0}
+								<a
+									href="/projects/{encodeURIComponent(
+										p.id
+									)}/sessions/{pinnedSessionIds[0]}"
+									onclick={(e) => e.stopPropagation()}
+									class="pointer-events-auto relative ml-auto inline-flex items-center gap-1 rounded-md bg-warm-500/15 px-1.5 py-0.5 text-warm-400 ring-1 ring-inset ring-warm-500/30 transition hover:bg-warm-500/25 hover:text-warm-300"
+									title="Jump to first pinned session"
+								>
+									<svg class="size-3" viewBox="0 0 24 24" fill="currentColor">
+										<path
+											d="M16 4.5a1 1 0 0 1 1 1V9.4a1 1 0 0 0 .29.7l2 2A1 1 0 0 1 19 13.7V14a1 1 0 0 1-1 1h-5v6.5a1 1 0 0 1-2 0V15H6a1 1 0 0 1-1-1v-.3a1 1 0 0 1 .29-.7l2-2A1 1 0 0 0 7.5 9.4V5.5a1 1 0 0 1 1-1Z"
+										/>
+									</svg>
+									<span class="font-mono">{pinnedSessionIds.length}</span>
+									<svg
+										class="size-3"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
 									>
-										<svg class="size-3" viewBox="0 0 24 24" fill="currentColor">
-											<path
-												d="M16 4.5a1 1 0 0 1 1 1V9.4a1 1 0 0 0 .29.7l2 2A1 1 0 0 1 19 13.7V14a1 1 0 0 1-1 1h-5v6.5a1 1 0 0 1-2 0V15H6a1 1 0 0 1-1-1v-.3a1 1 0 0 1 .29-.7l2-2A1 1 0 0 0 7.5 9.4V5.5a1 1 0 0 1 1-1Z"
-											/>
-										</svg>
-										<span class="font-mono">{pinnedSessionIds.length}</span>
-										<svg
-											class="size-3"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2"
-										>
-											<path d="M7 17 17 7" />
-											<path d="M7 7h10v10" />
-										</svg>
-									</a>
-								{/if}
-								<span class="font-mono">{formatBytes(p.totalSize)}</span>
-							</span>
+										<path d="M7 17 17 7" />
+										<path d="M7 7h10v10" />
+									</svg>
+								</a>
+							{/if}
 						</div>
 					</div>
 				</li>

@@ -1,3 +1,5 @@
+import type { TokensByModel } from './tokens';
+
 export type ProjectSummary = {
 	id: string;
 	cwd: string;
@@ -9,6 +11,7 @@ export type ProjectSummary = {
 	lastActivity: number;
 	firstActivity: number;
 	totalSize: number;
+	tokensByModel: TokensByModel;
 };
 
 export type SessionSummary = {
@@ -30,6 +33,7 @@ export type SessionSummary = {
 	title: string | null;
 	fileSize: number;
 	hasErrors: boolean;
+	tokensByModel: TokensByModel;
 };
 
 export type SearchHit = {
@@ -63,7 +67,14 @@ export type NormalizedEvent = {
 	toolResult?: unknown;
 	toolResultIsError?: boolean;
 	model?: string;
-	usage?: { input?: number; output?: number; cacheRead?: number; cacheCreate?: number };
+	usage?: {
+		input?: number;
+		output?: number;
+		cacheRead?: number;
+		cacheCreate?: number;
+		cacheCreate5m?: number;
+		cacheCreate1h?: number;
+	};
 	subtype?: string;
 	error?: unknown;
 	raw: unknown;
@@ -83,8 +94,7 @@ export type SessionDetail = {
 		userMessages: number;
 		assistantMessages: number;
 		toolUses: number;
-		totalInputTokens: number;
-		totalOutputTokens: number;
+		tokensByModel: TokensByModel;
 		toolBreakdown: Record<string, number>;
 		filesTouched: string[];
 	};

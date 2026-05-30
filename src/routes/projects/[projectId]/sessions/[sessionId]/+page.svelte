@@ -1,10 +1,16 @@
 <script lang="ts">
 	import {
-		formatRelativeTime,
 		formatAbsoluteTime,
+		formatCompactNumber,
+		formatCost,
 		formatDuration,
+		formatRelativeTime,
 		shortenPath
 	} from '$lib/format';
+	import { sumTokens } from '$lib/tokens';
+	import { costFor, pricingFor, summarizePricing } from '$lib/pricing';
+	import WarningIcon from '$lib/components/WarningIcon.svelte';
+	import PricingWarning from '$lib/components/PricingWarning.svelte';
 	import ToolCall from '$lib/components/ToolCall.svelte';
 	import JsonView from '$lib/components/JsonView.svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
@@ -60,9 +66,8 @@
 		return arr.slice(0, 8);
 	});
 
-	const totalTokens = $derived(
-		data.session.stats.totalInputTokens + data.session.stats.totalOutputTokens
-	);
+	const tokens = $derived(sumTokens(data.session.stats.tokensByModel));
+	const pricing = $derived(summarizePricing(data.session.stats.tokensByModel));
 </script>
 
 <section class="space-y-6">
@@ -158,7 +163,7 @@
 			</div>
 		</div>
 
-		<dl class="relative grid grid-cols-2 gap-3 sm:grid-cols-4">
+		<dl class="relative grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
 			<div class="metric-tile" style="--metric-color: #60a5fa;">
 				<dt class="text-[10px] font-medium uppercase tracking-[0.16em] text-ink-500">Prompts</dt>
 				<dd
@@ -186,14 +191,59 @@
 					{data.session.stats.toolUses}
 				</dd>
 			</div>
-			<div class="metric-tile" style="--metric-color: #10b981;">
-				<dt class="text-[10px] font-medium uppercase tracking-[0.16em] text-ink-500">Tokens</dt>
+			<div class="metric-tile" style="--metric-color: #34d399;">
+				<dt class="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.16em] text-ink-500">
+					<span>Estimated Cost</span>
+					<PricingWarning unknownModels={pricing.unknownModels} size="size-3" />
+				</dt>
+				<dd
+					class="metric-number mt-1.5 font-mono tabular-nums text-2xl font-bold tracking-tight"
+					style="--metric-color: #34d399;"
+				>
+					{formatCost(pricing.cost)}
+				</dd>
+			</div>
+			<div class="metric-tile col-span-2" style="--metric-color: #10b981;">
+				<dt class="text-[10px] font-medium uppercase tracking-[0.16em] text-ink-500">Tokens total</dt>
 				<dd
 					class="metric-number mt-1.5 font-mono tabular-nums text-2xl font-bold tracking-tight"
 					style="--metric-color: #10b981;"
 				>
-					{totalTokens.toLocaleString()}
+					{formatCompactNumber(tokens.total)}
 				</dd>
+				<div class="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5">
+					<span class="flex items-center gap-1.5 text-[11px] text-ink-300">
+						<span class="inline-block size-2 rounded-full bg-blue-400"></span>
+						<span class="text-ink-500">in</span>
+						<span class="font-mono font-medium">{formatCompactNumber(tokens.input)}</span>
+					</span>
+					<span class="flex items-center gap-1.5 text-[11px] text-ink-300">
+						<span class="inline-block size-2 rounded-full bg-violet-400"></span>
+						<span class="text-ink-500">out</span>
+						<span class="font-mono font-medium">{formatCompactNumber(tokens.output)}</span>
+					</span>
+					{#if tokens.cacheRead > 0}
+						<span class="flex items-center gap-1.5 text-[11px] text-ink-300">
+							<span class="inline-block size-2 rounded-full bg-amber-400"></span>
+							<span class="text-ink-500">cache read</span>
+							<span class="font-mono font-medium">{formatCompactNumber(tokens.cacheRead)}</span>
+						</span>
+					{/if}
+					{#if tokens.cacheCreate5m > 0}
+						<span class="flex items-center gap-1.5 text-[11px] text-ink-300">
+							<span class="inline-block size-2 rounded-full bg-emerald-400"></span>
+							<span class="text-ink-500">cache write 5m</span>
+							<span class="font-mono font-medium">{formatCompactNumber(tokens.cacheCreate5m)}</span>
+						</span>
+					{/if}
+					{#if tokens.cacheCreate1h > 0}
+						<span class="flex items-center gap-1.5 text-[11px] text-ink-300">
+							<span class="inline-block size-2 rounded-full bg-teal-400"></span>
+							<span class="text-ink-500">cache write 1h</span>
+							<span class="font-mono font-medium">{formatCompactNumber(tokens.cacheCreate1h)}</span>
+						</span>
+					{/if}
+				</div>
 			</div>
 		</dl>
 
@@ -287,6 +337,37 @@
 											class="rounded-md bg-ink-800/70 px-1.5 py-0.5 font-mono text-[10px] text-ink-300"
 											>{e.model}</span
 										>
+									{/if}
+									{#if e.model && e.usage}
+										{@const usage = {
+											input: e.usage.input ?? 0,
+											output: e.usage.output ?? 0,
+											cacheRead: e.usage.cacheRead ?? 0,
+											cacheCreate: e.usage.cacheCreate ?? 0,
+											cacheCreate5m: e.usage.cacheCreate5m ?? 0,
+											cacheCreate1h: e.usage.cacheCreate1h ?? 0
+										}}
+										{@const known = pricingFor(e.model) !== null}
+										{@const cost = known ? costFor(usage, e.model) : 0}
+										{@const tooltip = [
+											usage.input && `input ${formatCompactNumber(usage.input)}`,
+											usage.output && `output ${formatCompactNumber(usage.output)}`,
+											usage.cacheRead && `cache_read ${formatCompactNumber(usage.cacheRead)}`,
+											usage.cacheCreate5m && `cache_write_5m ${formatCompactNumber(usage.cacheCreate5m)}`,
+											usage.cacheCreate1h && `cache_write_1h ${formatCompactNumber(usage.cacheCreate1h)}`
+										].filter(Boolean).join(' · ')}
+										{#if known && cost > 0}
+											<span
+												class="rounded-md bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-300"
+												title={tooltip}
+											>{formatCost(cost)}</span>
+										{:else if !known}
+											<WarningIcon
+												tooltip={`No pricing for "${e.model}" — cost cannot be estimated.`}
+												ariaLabel="Unknown model pricing"
+												size="size-3"
+											/>
+										{/if}
 									{/if}
 									<span>·</span>
 									<span>{formatAbsoluteTime(e.timestamp)}</span>

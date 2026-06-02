@@ -4,14 +4,19 @@
 		formatRelativeTime,
 		formatAbsoluteTime,
 		formatBytes,
+		formatCompactNumber,
+		formatCost,
 		formatDuration,
 		shortenPath,
 		truncate
 	} from '$lib/format';
+	import { sumTokens } from '$lib/tokens';
+	import { summarizePricing } from '$lib/pricing';
 	import { pinned } from '$lib/pinned.svelte';
 	import PinButton from '$lib/components/PinButton.svelte';
 	import EditableTitle from '$lib/components/EditableTitle.svelte';
 	import ResumeButton from '$lib/components/ResumeButton.svelte';
+	import PricingWarning from '$lib/components/PricingWarning.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -76,6 +81,9 @@
 	const pinnedCount = $derived(
 		sorted.filter((s) => pinned.hasSession(data.project.id, s.sessionId)).length
 	);
+
+	const tokenTotals = $derived(sumTokens(data.project.tokensByModel));
+	const pricing = $derived(summarizePricing(data.project.tokensByModel));
 </script>
 
 <section class="space-y-6">
@@ -108,6 +116,55 @@
 			{formatBytes(data.project.totalSize)}
 		</p>
 	</div>
+
+	{#if tokenTotals.total > 0}
+		<div class="surface-card rounded-2xl p-5 space-y-5">
+			<p class="text-[10px] font-medium uppercase tracking-[0.16em] text-ink-500">Token usage · all sessions</p>
+
+			<!-- Totals row -->
+			<div class="flex flex-wrap items-end gap-x-6 gap-y-3">
+				<div>
+					<div class="font-mono text-2xl font-bold tracking-tight text-ink-100">{formatCompactNumber(tokenTotals.total)}</div>
+					<div class="mt-0.5 text-[10px] text-ink-500">total tokens</div>
+				</div>
+				<div class="flex flex-wrap gap-x-5 gap-y-1.5 text-[11px]">
+					<span class="flex items-center gap-1.5">
+						<span class="inline-block size-2 rounded-full bg-blue-400"></span>
+						<span class="text-ink-500">Input</span>
+						<span class="font-mono font-medium text-ink-200">{formatCompactNumber(tokenTotals.input)}</span>
+					</span>
+					<span class="flex items-center gap-1.5">
+						<span class="inline-block size-2 rounded-full bg-violet-400"></span>
+						<span class="text-ink-500">Output</span>
+						<span class="font-mono font-medium text-ink-200">{formatCompactNumber(tokenTotals.output)}</span>
+					</span>
+					{#if tokenTotals.cacheRead > 0}
+						<span class="flex items-center gap-1.5">
+							<span class="inline-block size-2 rounded-full bg-amber-400"></span>
+							<span class="text-ink-500">Cache read</span>
+							<span class="font-mono font-medium text-ink-200">{formatCompactNumber(tokenTotals.cacheRead)}</span>
+						</span>
+					{/if}
+					{#if tokenTotals.cacheCreate > 0}
+						<span class="flex items-center gap-1.5">
+							<span class="inline-block size-2 rounded-full bg-emerald-400"></span>
+							<span class="text-ink-500">Cache write</span>
+							<span class="font-mono font-medium text-ink-200">{formatCompactNumber(tokenTotals.cacheCreate)}</span>
+						</span>
+					{/if}
+				</div>
+				<div class="ml-auto text-right">
+					<div class="font-mono text-2xl font-bold tracking-tight text-ink-100">
+						{formatCost(pricing.cost)}
+					</div>
+					<div class="mt-0.5 flex items-center justify-end gap-1.5 text-[10px] text-ink-500">
+						<span>estimated cost</span>
+						<PricingWarning unknownModels={pricing.unknownModels} size="size-3" />
+					</div>
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	<div class="flex flex-wrap items-center gap-3">
 		<label class="relative min-w-[240px] flex-1">
@@ -166,6 +223,8 @@
 			{#each sorted as s, i (s.sessionId)}
 				{@const isPinned = pinned.hasSession(data.project.id, s.sessionId)}
 				{@const isLastPinned = isPinned && i === pinnedCount - 1 && pinnedCount < sorted.length}
+				{@const sTokTotal = sumTokens(s.tokensByModel).total}
+				{@const sPricing = summarizePricing(s.tokensByModel)}
 				<li>
 					<div
 						class="surface-card group relative flex flex-col gap-3 rounded-2xl p-5 {isPinned
@@ -290,6 +349,18 @@
 								<span
 									><b class="font-mono text-ink-200">{formatDuration(s.durationMs)}</b> duration</span
 								>
+								{#if sTokTotal > 0}
+									<span><b class="font-mono text-ink-200">{formatCompactNumber(sTokTotal)}</b> tokens</span>
+								{/if}
+								{#if sPricing.cost > 0 || sPricing.unknownModels.length > 0}
+									<span class="inline-flex items-center gap-1.5">
+										<b class="font-mono text-ink-200">{formatCost(sPricing.cost)}</b>
+										<span>est. cost</span>
+										<span class="pointer-events-auto relative">
+											<PricingWarning unknownModels={sPricing.unknownModels} size="size-3" />
+										</span>
+									</span>
+								{/if}
 								<span class="ml-auto font-mono">{s.sessionId.slice(0, 8)}</span>
 							</div>
 

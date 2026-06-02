@@ -11,6 +11,8 @@ import type {
 	NormalizedEvent,
 	SearchHit
 } from '$lib/types';
+import type { TokensByModel } from '$lib/tokens';
+import { addUsage, emptyModelTokens, extractUsage, isNonEmptyUsage } from '$lib/tokens';
 
 const DEFAULT_HISTORY_DIR = join(homedir(), '.claude', 'projects');
 export const HISTORY_DIR = env.CLAUDE_PROJECTS_DIR?.trim() || DEFAULT_HISTORY_DIR;
@@ -164,6 +166,7 @@ export async function listProjects(): Promise<ProjectSummary[]> {
 			let firstActivity = Number.MAX_SAFE_INTEGER;
 			let totalSize = 0;
 			let cwd = '';
+			const tokensByModel: TokensByModel = {};
 			for (const f of files) {
 				const filePath = join(dir, f);
 				let fst;
@@ -178,20 +181,25 @@ export async function listProjects(): Promise<ProjectSummary[]> {
 				if (mt > lastActivity) lastActivity = mt;
 				const bt = fst.birthtimeMs || mt;
 				if (bt < firstActivity) firstActivity = bt;
-				// quick scan of first ~30 lines to find cwd + count user messages cheaply
 				let lineCount = 0;
 				let userCount = 0;
 				try {
 					for await (const obj of iterJsonlLines(filePath)) {
 						lineCount += 1;
 						if (obj && typeof obj === 'object') {
-							if (!cwd && typeof (obj as any).cwd === 'string') cwd = (obj as any).cwd;
-							const t = (obj as any).type;
-							if (t === 'user') {
-								const role = (obj as any).message?.role;
-								const content = (obj as any).message?.content;
-								// only count actual prompts (string content), not tool_results
+							const o = obj as any;
+							if (!cwd && typeof o.cwd === 'string') cwd = o.cwd;
+							if (o.type === 'user') {
+								const role = o.message?.role;
+								const content = o.message?.content;
 								if (role === 'user' && typeof content === 'string') userCount += 1;
+							} else if (o.type === 'assistant') {
+								const u = extractUsage(o.message?.usage);
+								if (isNonEmptyUsage(u)) {
+									const model: string = typeof o.message?.model === 'string' ? o.message.model : 'unknown';
+									if (!tokensByModel[model]) tokensByModel[model] = emptyModelTokens();
+									addUsage(tokensByModel[model], u);
+								}
 							}
 						}
 					}
@@ -214,7 +222,8 @@ export async function listProjects(): Promise<ProjectSummary[]> {
 				totalUserMessages,
 				lastActivity,
 				firstActivity,
-				totalSize
+				totalSize,
+				tokensByModel
 			} satisfies ProjectSummary;
 		})
 	);
@@ -278,6 +287,7 @@ async function summarizeSession(
 	let aiTitle: string | null = null;
 	let customTitle: string | null = null;
 	let lastBashCommand: string | null = null;
+	const tokensByModel: TokensByModel = {};
 	for await (const obj of iterJsonlLines(filePath)) {
 		messageCount += 1;
 		if (!obj || typeof obj !== 'object') continue;
@@ -309,6 +319,12 @@ async function summarizeSession(
 		} else if (o.type === 'assistant') {
 			assistantMessageCount += 1;
 			const content = o.message?.content;
+			const model: string = typeof o.message?.model === 'string' ? o.message.model : 'unknown';
+			const u = extractUsage(o.message?.usage);
+			if (isNonEmptyUsage(u)) {
+				if (!tokensByModel[model]) tokensByModel[model] = emptyModelTokens();
+				addUsage(tokensByModel[model], u);
+			}
 			if (Array.isArray(content)) {
 				for (const c of content) {
 					if (c?.type === 'tool_use') {
@@ -344,7 +360,8 @@ async function summarizeSession(
 		lastBashCommand,
 		title: finalTitle,
 		fileSize: st.size,
-		hasErrors
+		hasErrors,
+		tokensByModel
 	} satisfies SessionSummary;
 }
 
@@ -376,8 +393,7 @@ export async function getSession(
 	let userMessages = 0;
 	let assistantMessages = 0;
 	let toolUses = 0;
-	let totalInputTokens = 0;
-	let totalOutputTokens = 0;
+	const tokensByModel: TokensByModel = {};
 	const toolBreakdown: Record<string, number> = {};
 	const filesTouchedSet = new Set<string>();
 	for (const obj of lines) {
@@ -430,16 +446,13 @@ export async function getSession(
 		} else if (type === 'assistant') {
 			assistantMessages += 1;
 			const content = o.message?.content;
-			const usage = o.message?.usage ?? {};
-			totalInputTokens += usage.input_tokens || 0;
-			totalOutputTokens += usage.output_tokens || 0;
-			const u = {
-				input: usage.input_tokens,
-				output: usage.output_tokens,
-				cacheRead: usage.cache_read_input_tokens,
-				cacheCreate: usage.cache_creation_input_tokens
-			};
 			const model = o.message?.model;
+			const u = extractUsage(o.message?.usage);
+			if (isNonEmptyUsage(u)) {
+				const key = typeof model === 'string' ? model : 'unknown';
+				if (!tokensByModel[key]) tokensByModel[key] = emptyModelTokens();
+				addUsage(tokensByModel[key], u);
+			}
 			if (Array.isArray(content)) {
 				for (const c of content) {
 					if (c?.type === 'text') {
@@ -523,8 +536,7 @@ export async function getSession(
 			userMessages,
 			assistantMessages,
 			toolUses,
-			totalInputTokens,
-			totalOutputTokens,
+			tokensByModel,
 			toolBreakdown,
 			filesTouched: [...filesTouchedSet].sort()
 		}

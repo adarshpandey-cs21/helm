@@ -9,6 +9,15 @@ export type ModelPricing = {
 	cacheWrite1h: number;
 };
 
+// Claude Fable 5 and Claude Mythos 5 share identical pricing.
+const FABLE_MYTHOS_5: ModelPricing = {
+	baseInput: 10,
+	output: 50,
+	cacheRead: 1,
+	cacheWrite5m: 12.5,
+	cacheWrite1h: 20
+};
+
 const OPUS_45_PLUS: ModelPricing = {
 	baseInput: 5,
 	output: 25,
@@ -44,6 +53,8 @@ const HAIKU_45: ModelPricing = {
 // Non-deprecated Anthropic API models (May 2026 pricing page).
 // Prefix-matched so date-suffixed IDs like "claude-haiku-4-5-20251001" resolve.
 const PRICING_BY_PREFIX: ReadonlyArray<readonly [prefix: string, pricing: ModelPricing]> = [
+	['claude-fable-5', FABLE_MYTHOS_5],
+	['claude-mythos-5', FABLE_MYTHOS_5],
 	['claude-opus-4-8', OPUS_45_PLUS],
 	['claude-opus-4-7', OPUS_45_PLUS],
 	['claude-opus-4-6', OPUS_45_PLUS],
